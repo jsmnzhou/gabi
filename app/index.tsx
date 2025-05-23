@@ -1,25 +1,61 @@
-import { Image } from 'expo-image';
+
 import { StyleSheet, View, Alert, Pressable, ScrollView, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
-
-import { HelloWave } from '@/components/HelloWave';
-import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import Screen from '@/components/Screen';
 
 export default function HomeScreen() {
-  
-  const router = useRouter();
-  const [isMenuMode, setIsMenuMode] = useState(false);
   
   const [toggledButtons, setToggledButtons] = useState<[boolean, boolean, boolean]>([
     false,
     false,
     false,
   ]);
+
+  const exampleLines = [
+    'Line 1: Welcome to Gabi!',
+    'Line 2: This is an example screen.',
+    'Line 3: Using custom font OpenDyslexic.',
+    'Line 4: Buttons are on the right, for speak, listen, and menu.',
+    'Line 5: Press buttons far right to simulate scroll wheel'
+  ];
+
+ const [displayedLines, setDisplayedLines] = useState<string[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const [isWordMode, setIsWordMode] = useState(false);
+  const [highlightedWords, setHighlightedWords] = useState<string[]>([]);
+  const [highlightWordIndex, setHighlightWordIndex] = useState(0);
+
+  const animateAllLinesByWords = async () => {
+  setIsAnimating(true);
+  const animatedLines: string[] = [];
+
+  for (let i = 0; i < exampleLines.length; i++) {
+    const words = exampleLines[i].split(' ');
+    let currentLine = '';
+
+    for (let j = 0; j < words.length; j++) {
+      currentLine += (j > 0 ? ' ' : '') + words[j];
+
+      const updated = [...animatedLines, currentLine];
+      setDisplayedLines([
+        ...updated,
+        ...Array(exampleLines.length - updated.length).fill(''),
+      ]);
+
+      // 👇 Update the highlight index to match the currently animating line
+      setHighlightIndex(i);
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    animatedLines.push(exampleLines[i]);
+  }
+
+  setIsAnimating(false);
+};
 
   const toggleButton = (index: number) => {
   setToggledButtons(prev => {
@@ -29,9 +65,80 @@ export default function HomeScreen() {
   });
 };
 
+const animateWords = async (words: string[]) => {
+  for (let i = 0; i < words.length; i++) {
+    setHighlightWordIndex(i);
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+};
+
+ 
+
+    const scrollUp = () => {
+      if (isWordMode) {
+        setHighlightWordIndex(prev => Math.max(prev - 1, 0));
+      } else {
+        setHighlightIndex(prev => (prev - 1 + exampleLines.length) % exampleLines.length);
+        setHighlightWordIndex(0); // Reset word index on new line
+      }
+    };
+
+    const scrollDown = () => {
+      if (isWordMode) {
+        const words = exampleLines[highlightIndex].split(' ');
+        setHighlightWordIndex(prev => Math.min(prev + 1, words.length - 1));
+      } else {
+        setHighlightIndex(prev => (prev + 1) % exampleLines.length);
+        setHighlightWordIndex(0); // Reset word index on new line
+      }
+    };
+    const [highlightIndex, setHighlightIndex] = useState(0);
+
+    const autoScrollLines = async () => {
+  for (let i = highlightIndex; i < exampleLines.length; i++) {
+    setHighlightIndex(i);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+};
+
+
   return (
     <View style={styles.container}>
-      <Screen />
+      <ThemedView style={styles.leftBoxOuter}>
+            <ThemedView style={styles.leftBoxInner}>
+              <ScrollView style={styles.scrollArea}>
+                {displayedLines.map((line, index) => {
+                  if (isWordMode && index === highlightIndex) {
+                    const words = line.split(' ');
+                    return (
+                      <Text key={index} style={styles.lineText}>
+                        {words.map((word, wIndex) => (
+                          <Text
+                            key={wIndex}
+                            style={wIndex === highlightWordIndex ? styles.highlightedLine : undefined}
+                          >
+                            {word + ' '}
+                          </Text>
+                        ))}
+                      </Text>
+                    );
+                  } else {
+                    return (
+                      <Text
+                        key={index}
+                        style={[
+                          styles.lineText,
+                          index === highlightIndex && !isWordMode && styles.highlightedLine,
+                        ]}
+                      >
+                        {line}
+                      </Text>
+                    );
+                  }
+                })}
+              </ScrollView>
+            </ThemedView>
+          </ThemedView>
 
     
       {/* Right side with buttons */}
@@ -41,6 +148,7 @@ export default function HomeScreen() {
             style={[styles.bevelButton, toggledButtons[0] && styles.glow]}
             onPress={() => {
               toggleButton(0);
+              autoScrollLines()
             }}
           >
             <AntDesign name="sound" size={24} color="#fff" style={styles.iconOnly} />
@@ -51,6 +159,12 @@ export default function HomeScreen() {
             style={[styles.bevelButton, toggledButtons[1] && styles.glow]}
             onPress={() => {
               toggleButton(1);
+              if (isWordMode) {
+                animateWords(highlightedWords)
+              } else {
+                animateAllLinesByWords();
+              }
+              
             }}
           >
             <Ionicons name="mic-sharp" size={24} color="#fff" style={styles.iconOnly} />
@@ -61,7 +175,19 @@ export default function HomeScreen() {
             style={[styles.bevelButton, toggledButtons[2] && styles.glow]}
             onPress={() => {
               toggleButton(2);
-              setIsMenuMode(prev => !prev);
+              
+              // Clear the screen
+              setDisplayedLines([]);
+
+              // Reset indices
+              setHighlightIndex(0);
+              setHighlightWordIndex(0);
+
+              setHighlightedWords([])
+
+              // Optionally reset word-by-word mode
+              setIsWordMode(false);
+              setIsAnimating(false)
             }}
           >
             <Ionicons name="menu" size={24} color="#fff" style={styles.iconOnly} />
@@ -75,7 +201,15 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={scrollUp} style={styles.scrollButton}>
           <Ionicons name="chevron-up" size={24} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.scrollButton}>
+        <TouchableOpacity
+          style={styles.scrollButton}
+          onPress={() => {
+            setIsWordMode(!isWordMode);
+            const words = exampleLines[highlightIndex].split(' ');
+            setHighlightedWords(words);
+            setHighlightWordIndex(0);
+          }}
+        >
           <Ionicons name="stop-outline" size={24} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity onPress={scrollDown} style={styles.scrollButton}>
@@ -115,6 +249,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     paddingVertical: 6,
+     fontFamily: 'OpenDyslexicBold',
   },
   highlightedLine: {
     backgroundColor: '#efefef',
